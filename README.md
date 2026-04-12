@@ -19,7 +19,7 @@ You set goals in `program.md`, the agent does the rest. You only approve plans a
 ## Install
 
 ```bash
-claude plugins add ShieldBytes/EX-APPAgent
+claude plugins add Shameless521/EX-APPAgent
 ```
 
 ## Usage
