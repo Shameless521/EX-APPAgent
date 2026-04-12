@@ -1,0 +1,24 @@
+{
+  "stage": {
+    "current": "cold_start",
+    "milestone_target": 1.0,
+    "milestone_unlocks": "small ad spend"
+  },
+  "latest_metrics": {
+    "date": null,
+    "daily_revenue": 0,
+    "daily_downloads": 0,
+    "rating": null,
+    "active_subscriptions": 0
+  },
+  "current_conversion": {
+    "download_to_register": null,
+    "register_to_trial": null,
+    "trial_to_paid": null
+  },
+  "last_analysis": null,
+  "last_analysis_summary": null,
+  "active_experiments_count": 0,
+  "total_experiments": 0,
+  "experience_entries": 0
+}

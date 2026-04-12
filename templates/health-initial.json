@@ -1,0 +1,17 @@
+{
+  "python_engine": {
+    "last_run": null,
+    "last_success": null,
+    "status": "not_configured",
+    "errors": []
+  },
+  "data_freshness": {
+    "metrics": null,
+    "competitors": null,
+    "aso": null
+  },
+  "api_status": {
+    "appstore_connect": "not_configured",
+    "google_play": "not_configured"
+  }
+}
