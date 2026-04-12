@@ -44,7 +44,7 @@ The plugin files are located at the same level as this skill file's parent direc
 - Agents: `agents/` (relative to plugin root)
 - Templates: `templates/` (relative to plugin root)
 
-To find the plugin root, this skill is at `{plugin_root}/.claude/commands/appagent.md`, so the plugin root is two directories up.
+To find the plugin root, this skill is at `{plugin_root}/commands/appagent.md`, so the plugin root is one directory up.
 
 ## Module Loading
 

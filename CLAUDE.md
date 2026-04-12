@@ -8,7 +8,7 @@ This repo is a Claude Code **marketplace** containing one plugin:
 
 - `.claude-plugin/marketplace.json` — Marketplace manifest
 - `plugins/ex-appagent/` — The actual plugin
-  - `.claude/commands/appagent.md` — Main skill entry point (/appagent)
+  - `commands/appagent.md` — Main skill entry point (/appagent)
   - `modules/` — Reusable instruction modules loaded via Read tool
   - `agents/` — Sub-agent instruction files dispatched via Agent tool
   - `templates/` — Templates for initializing new apps
@@ -19,7 +19,7 @@ This repo is a Claude Code **marketplace** containing one plugin:
 
 This is a Claude Code Plugin packaged as a marketplace. Skills are Markdown instruction files, not traditional code.
 
-- Skill files go in `plugins/ex-appagent/.claude/commands/`
+- Skill files go in `plugins/ex-appagent/commands/`
 - Module files go in `plugins/ex-appagent/modules/`
 - Agent files go in `plugins/ex-appagent/agents/`
 - Plugin metadata in `plugins/ex-appagent/.claude-plugin/plugin.json`

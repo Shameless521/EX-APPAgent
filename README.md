@@ -131,7 +131,7 @@ Hybrid: Claude Code Skill + Python Engine (Phase 2)
 
 ```
 plugins/ex-appagent/
-├── .claude/commands/appagent.md    # Main skill entry point
+├── commands/appagent.md            # Main skill entry point
 ├── modules/                        # Instruction modules
 │   ├── harness-loop.md             # Core 10-step cycle
 │   ├── cold-start.md               # First-run initialization
