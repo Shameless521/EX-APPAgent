@@ -4,21 +4,26 @@ Autonomous app management agent framework. Hybrid architecture: Claude Code Skil
 
 ## Project Structure
 
-- `.claude/commands/appagent.md` — Main skill entry point (/appagent)
-- `modules/` — Reusable instruction modules loaded via Read tool
-- `agents/` — Sub-agent instruction files dispatched via Agent tool
-- `templates/` — Templates for initializing new apps
+This repo is a Claude Code **marketplace** containing one plugin:
+
+- `.claude-plugin/marketplace.json` — Marketplace manifest
+- `plugins/ex-appagent/` — The actual plugin
+  - `.claude/commands/appagent.md` — Main skill entry point (/appagent)
+  - `modules/` — Reusable instruction modules loaded via Read tool
+  - `agents/` — Sub-agent instruction files dispatched via Agent tool
+  - `templates/` — Templates for initializing new apps
 - `docs/superpowers/specs/` — Design specifications
 - `docs/superpowers/plans/` — Implementation plans
 
 ## Development
 
-This is a Claude Code Plugin. Skills are Markdown instruction files, not traditional code.
+This is a Claude Code Plugin packaged as a marketplace. Skills are Markdown instruction files, not traditional code.
 
-- Skill files go in `.claude/commands/`
-- Module files go in `modules/`
-- Agent files go in `agents/`
-- Plugin metadata in `.claude-plugin/plugin.json`
+- Skill files go in `plugins/ex-appagent/.claude/commands/`
+- Module files go in `plugins/ex-appagent/modules/`
+- Agent files go in `plugins/ex-appagent/agents/`
+- Plugin metadata in `plugins/ex-appagent/.claude-plugin/plugin.json`
+- Marketplace manifest in `.claude-plugin/marketplace.json`
 
 ## Key Design Decisions
 

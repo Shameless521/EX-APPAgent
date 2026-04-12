@@ -1,0 +1,22 @@
+{
+  "name": "ex-appagent-marketplace",
+  "owner": {
+    "name": "Shameless521"
+  },
+  "metadata": {
+    "description": "EX-APPAgent Plugin Marketplace",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "ex-appagent",
+      "source": "./plugins/ex-appagent",
+      "description": "Autonomous app management agent — feature iteration, marketing, competitor analysis, and revenue optimization with self-improving harness loop",
+      "version": "0.1.0",
+      "author": {
+        "name": "Shameless521"
+      },
+      "repository": "https://github.com/Shameless521/EX-APPAgent"
+    }
+  ]
+}

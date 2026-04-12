@@ -19,7 +19,8 @@ You set goals in `program.md`, the agent does the rest. You only approve plans a
 ## Install
 
 ```bash
-claude plugins add Shameless521/EX-APPAgent
+claude plugins marketplace add Shameless521/EX-APPAgent
+claude plugins install ex-appagent
 ```
 
 ## Usage
@@ -129,21 +130,22 @@ Hybrid: Claude Code Skill + Python Engine (Phase 2)
 ## Project Structure
 
 ```
-.claude/commands/appagent.md    # Main skill entry point
-modules/                        # Instruction modules
-  harness-loop.md               # Core 10-step cycle
-  cold-start.md                 # First-run initialization
-  priority-engine.md            # Priority determination
-  action-lifecycle.md           # Plan approval workflow
-  state-manager.md              # State read/write
-agents/                         # Sub-agent instructions
-  analyst.md                    # Data analysis & strategy
-  competitor-researcher.md      # Market research
-  code-operator.md              # Code modifications
-templates/                      # Initialization templates
-  program-template.md           # program.md template
-  state-initial.json            # Initial state
-  health-initial.json           # Initial health
+plugins/ex-appagent/
+├── .claude/commands/appagent.md    # Main skill entry point
+├── modules/                        # Instruction modules
+│   ├── harness-loop.md             # Core 10-step cycle
+│   ├── cold-start.md               # First-run initialization
+│   ├── priority-engine.md          # Priority determination
+│   ├── action-lifecycle.md         # Plan approval workflow
+│   └── state-manager.md            # State read/write
+├── agents/                         # Sub-agent instructions
+│   ├── analyst.md                  # Data analysis & strategy
+│   ├── competitor-researcher.md    # Market research
+│   └── code-operator.md           # Code modifications
+└── templates/                      # Initialization templates
+    ├── program-template.md         # program.md template
+    ├── state-initial.json          # Initial state
+    └── health-initial.json         # Initial health
 ```
 
 ## Per-App Data
