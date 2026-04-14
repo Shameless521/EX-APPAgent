@@ -32,6 +32,9 @@ First run automatically guides you through all setup (API keys, app registration
 - Detect data anomalies and diagnose causes
 - Manage A/B experiments (hypothesize → observe → keep/discard)
 - Gets smarter over time — the agent learns its own data collection strategy
+- Budget ROI tracking with ROAS calculation and compliance checks
+- Milestone auto-detection — celebrates achievements and unlocks new strategies
+- Self-expanding capabilities — agent proposes new analysis tools when needed
 
 ## What You Do
 

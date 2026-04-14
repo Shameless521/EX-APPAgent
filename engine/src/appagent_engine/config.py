@@ -79,6 +79,59 @@ class Config:
         return cls(appstore_connect=asc, google_play=gp, collection=coll)
 
 
+def parse_milestones(program_md_path: Path) -> list[dict]:
+    """Parse milestones from program.md.
+
+    Returns: [{"target": 1.0, "label": "$1/day", "unlocks": "small ad spend"}, ...]
+    """
+    if not program_md_path.exists():
+        return []
+
+    content = program_md_path.read_text()
+    milestones = []
+    in_milestones = False
+
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if "milestones:" in stripped:
+            in_milestones = True
+            continue
+        if in_milestones:
+            if stripped.startswith("- "):
+                # Parse: "- $1/day → monetization model validated (unlock: small ad spend)"
+                text = stripped[2:]
+                # Extract target value
+                target = _extract_dollar_value(text)
+                # Extract label (before →)
+                label = text.split("→")[0].strip() if "→" in text else text.split("(")[0].strip()
+                # Extract unlocks (after "unlock:" in parentheses)
+                unlocks = ""
+                if "unlock:" in text.lower():
+                    unlocks_part = text.lower().split("unlock:")[1]
+                    unlocks = unlocks_part.split(")")[0].strip()
+                elif "（" in text and "）" in text:
+                    unlocks = text[text.index("（") + 1:text.index("）")]
+
+                if target is not None:
+                    milestones.append({
+                        "target": target,
+                        "label": label,
+                        "unlocks": unlocks,
+                    })
+            elif not stripped.startswith("-") and not stripped.startswith("#"):
+                if stripped and not stripped.startswith(" "):
+                    break
+
+    return milestones
+
+
+def _extract_dollar_value(text: str) -> float | None:
+    """Extract dollar value from text like '$1/day', '$5/day', '$20/day'."""
+    import re
+    match = re.search(r'\$(\d+(?:\.\d+)?)', text)
+    return float(match.group(1)) if match else None
+
+
 @dataclass
 class AppPlatform:
     bundle_id: str | None = None      # iOS

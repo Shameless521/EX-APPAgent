@@ -243,6 +243,39 @@ def _collect_one_app(config: Config, app_info, categories: set, target_dates):
         else:
             click.echo("  No pending experiments")
 
+    # --- Milestone Detection ---
+    click.echo("\n[Milestone] Checking...")
+    try:
+        from appagent_engine.analyzer.milestone import check_milestone, write_milestone_pending
+        from appagent_engine.config import parse_milestones
+        milestones = parse_milestones(app_info.path / "program.md")
+        if milestones:
+            # Read current stage from state.json
+            state_path = appagent_dir / "state.json"
+            current_stage = "from_0_to_1"
+            if state_path.exists():
+                import json as _json
+                state = _json.loads(state_path.read_text())
+                current_stage = state.get("stage", {}).get("current", "from_0_to_1")
+
+            metrics_dir = appagent_dir / "data" / "metrics"
+            result = check_milestone(metrics_dir, milestones, current_stage)
+            if result["reached"]:
+                write_milestone_pending(appagent_dir, result)
+                ms = result["milestone"]
+                click.echo(f"  🎯 MILESTONE REACHED: {ms['label']}! ({result['consecutive_days']} consecutive days)")
+                click.echo(f"  Unlocked: {ms['unlocks']}")
+            else:
+                ms = result["milestone"]
+                if ms:
+                    click.echo(f"  Next: {ms['label']} ({result['consecutive_days']}/3 consecutive days)")
+                else:
+                    click.echo("  All milestones achieved!")
+        else:
+            click.echo("  No milestones configured in program.md")
+    except Exception as e:
+        click.echo(f"  Error: {e}", err=True)
+
     # --- Finalize ---
     health.update_freshness_from_dir(appagent_dir)
     health.mark_run_success()
@@ -336,6 +369,91 @@ def health():
                     click.echo(f"  Backfill: {gap} day(s) missing (last: {files[-1]}, available: {latest_available})")
                 else:
                     click.echo(f"  Backfill: up to date")
+
+
+@main.group()
+def budget():
+    """Track ad spend and ROI."""
+    pass
+
+
+@budget.command("add")
+@click.option("--app", required=True, help="App name")
+@click.option("--channel", required=True, help="Ad channel (e.g., 'Apple Search Ads')")
+@click.option("--spend", required=True, type=float, help="Amount spent")
+@click.option("--revenue", "attributed_revenue", default=0.0, type=float, help="Revenue attributed to this spend")
+@click.option("--date", "entry_date", help="Date YYYY-MM-DD (default: today)")
+@click.option("--note", default="", help="Optional note")
+def budget_add(app: str, channel: str, spend: float, attributed_revenue: float, entry_date: str | None, note: str):
+    """Record a budget spend entry."""
+    from appagent_engine.analyzer.budget import append_budget_entry
+    registry = AppRegistry()
+    app_info = registry.find_by_name(app)
+    if not app_info:
+        click.echo(f"App '{app}' not found.")
+        sys.exit(1)
+
+    d = date.fromisoformat(entry_date) if entry_date else None
+    append_budget_entry(app_info.appagent_dir, channel, spend, attributed_revenue, d, note)
+    click.echo(f"✓ Recorded: {channel} ${spend:.2f}" + (f" → ${attributed_revenue:.2f} revenue" if attributed_revenue else ""))
+
+
+@budget.command("status")
+@click.option("--app", help="App name (default: all)")
+def budget_status(app: str | None):
+    """Show budget ROI status."""
+    from appagent_engine.analyzer.budget import load_budget_log, check_budget_compliance, spend_by_channel
+    registry = AppRegistry()
+
+    apps = registry.apps
+    if app:
+        found = registry.find_by_name(app)
+        if not found:
+            click.echo(f"App '{app}' not found.")
+            sys.exit(1)
+        apps = [found]
+
+    for app_info in apps:
+        entries = load_budget_log(app_info.appagent_dir)
+        if not entries:
+            click.echo(f"\n{app_info.name}: No budget entries recorded")
+            continue
+
+        # Read limits from program.md (simple extraction)
+        daily_limit = 10.0  # Default
+        min_roas = 1.5      # Default
+        program_path = app_info.path / "program.md"
+        if program_path.exists():
+            content = program_path.read_text()
+            for line in content.split("\n"):
+                if "daily_limit:" in line:
+                    import re
+                    m = re.search(r'\$?(\d+(?:\.\d+)?)', line.split(":")[1])
+                    if m:
+                        daily_limit = float(m.group(1))
+                elif "min_roas:" in line:
+                    import re
+                    m = re.search(r'(\d+(?:\.\d+)?)', line.split(":")[1])
+                    if m:
+                        min_roas = float(m.group(1))
+
+        status = check_budget_compliance(entries, daily_limit, min_roas)
+        channels = spend_by_channel(entries)
+
+        click.echo(f"\n{'='*40}")
+        click.echo(f"  {app_info.name} — Budget")
+        click.echo(f"{'='*40}")
+        click.echo(f"  Today: ${status['today_spend']:.2f} / ${status['daily_limit']:.2f} limit")
+        click.echo(f"  7-day ROAS: {status['roas_7d']:.2f}x" if status['roas_7d'] else "  7-day ROAS: no spend")
+        click.echo(f"  7-day total: ${status['total_spend_7d']:.2f}")
+
+        if channels:
+            click.echo(f"  By channel (30d):")
+            for ch, amt in channels.items():
+                click.echo(f"    {ch}: ${amt:.2f}")
+
+        for w in status["warnings"]:
+            click.echo(f"  ⚠ {w}")
 
 
 @main.command()

@@ -34,13 +34,22 @@ Read `.appagent/health.json` using Read tool.
   - If versions match → no action needed, do not mention it
 - Extract: `data_freshness` timestamps, `api_status`, last run time.
 
-## Step 3: Read State
+## Step 3: Read State & Check Milestones
 
 Read `.appagent/state.json` using Read tool (via state-manager module).
 
 - If file does not exist → trigger cold start. STOP loop here.
 - If `stage.current` = `"cold_start"` → run cold start Phase C (analysis). After completion, update stage and continue.
 - Extract: current stage, latest metrics, last analysis timestamp, active experiments.
+
+**Milestone check:** Read `.appagent/milestone_pending.json` if it exists.
+- If present → a milestone has been reached! Set `milestone_reached = true` for priority engine.
+- The priority engine will handle this as Priority 1 (highest).
+- After celebration and stage update, delete `milestone_pending.json`.
+
+**Budget check:** Read `.appagent/data/budget/log.jsonl` if it exists.
+- Run via Bash: `appagent budget status --app "<app_name>"` to get current ROI data.
+- Note any warnings (over-budget, low ROAS) for inclusion in the analysis summary.
 
 ## Step 3.5: Smart Collection Decision
 
@@ -146,9 +155,16 @@ The priority engine returns:
 Based on the priority engine's determination:
 
 **Priority 1 (Milestone):**
-- Announce achievement
-- Update state via state-manager module
-- Present unlocked strategies
+- Read `.appagent/milestone_pending.json` for details
+- Announce the achievement with celebration
+- Show what's unlocked (e.g., "Milestone $1/day reached! Unlocked: small ad spend")
+- Update `state.json` via state-manager module:
+  - `stage.current` → new stage (e.g., `"from_1_to_5"`)
+  - `stage.milestone_target` → next target
+  - `stage.milestone_unlocks` → what the next milestone unlocks
+  - Add current milestone to `stage.history`
+- Delete `.appagent/milestone_pending.json`
+- Present the new strategy space available at this stage
 
 **Priority 2 (Pending Plans):**
 - Read `modules/action-lifecycle.md`
@@ -170,6 +186,11 @@ Based on the priority engine's determination:
 - May dispatch competitor-researcher agent if competitor analysis is needed
 - May dispatch code-operator agent if code changes are suggested
 - Generate plans in actions/pending/
+- **Capability gap detection**: If during analysis the agent identifies something it cannot do
+  (e.g., "I need review sentiment analysis but don't have that capability"), read
+  `modules/capability-expansion.md` and follow its workflow to propose a new extension.
+
+**Budget in summary:** If budget data exists, include ROI metrics and any warnings in the summary output.
 
 ## Step 9: Present Summary
 
