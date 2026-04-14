@@ -15,6 +15,7 @@ ALL_CATEGORIES = ("metrics", "reviews", "aso", "competitors", "experiments")
 
 
 @click.group()
+@click.version_option(package_name="appagent-engine")
 def main():
     """EX-APPAgent Data Engine — automated app metrics collection."""
     pass
