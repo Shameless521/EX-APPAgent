@@ -19,8 +19,13 @@ Read `program.md` from the project root using Read tool.
 Read `.appagent/health.json` using Read tool.
 
 - If `.appagent/` directory does not exist → trigger cold start (read `modules/cold-start.md`). STOP loop here.
-- If `health.json` does not exist → this is fine in Phase 1 (no Python engine yet), continue with warning.
-- If Python engine `last_success` is more than 48 hours ago → warn user: "Python engine data is stale (last run: {date}). Analysis may be based on outdated data. Consider running `appagent collect` or checking the engine status."
+- If `health.json` has `python_engine.status` = `"not_configured"` or `"not_installed"`:
+  - Check if engine is installed: `which appagent 2>/dev/null`
+  - If not installed → offer to install: "Data engine not found. Want me to install it? This enables automated metrics collection."
+  - If user agrees → run `uv tool install "appagent-engine @ git+https://github.com/Shameless521/EX-APPAgent#subdirectory=engine"` and then `appagent collect`
+  - If user declines → continue in Phase 1 mode (LLM-only analysis)
+- If `health.json` does not exist → continue with warning (Phase 1 mode is fine).
+- If Python engine `last_success` is more than 48 hours ago → warn user: "Data is stale (last collected: {date}). Running a quick refresh..." and execute `appagent collect` in the background.
 - Continue regardless — stale data is better than no analysis.
 
 ## Step 3: Read State
