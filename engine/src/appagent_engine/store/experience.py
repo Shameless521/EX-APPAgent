@@ -9,7 +9,7 @@ from pathlib import Path
 from appagent_engine.config import GLOBAL_DIR
 from appagent_engine.store.writer import atomic_write_json
 
-CATEGORIES = ("aso", "pricing", "growth", "product")
+CATEGORIES = ("aso", "pricing", "growth", "product", "ops")
 
 
 def _ensure_experience_file(path: Path) -> list:
