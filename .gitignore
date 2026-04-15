@@ -4,3 +4,4 @@ engine/.venv/
 engine/uv.lock
 __pycache__/
 *.pyc
+tasks/
