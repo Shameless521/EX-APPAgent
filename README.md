@@ -16,21 +16,25 @@ claude plugins install ex-appagent
 **Codex CLI:**
 
 ```bash
-git clone https://github.com/Shameless521/EX-APPAgent.git
+codex plugin marketplace add Shameless521/EX-APPAgent
 ```
 
-To use it as a Codex plugin, add this repo as a local plugin marketplace:
+Or install from a local clone while developing:
 
 ```bash
+git clone https://github.com/Shameless521/EX-APPAgent.git
 codex plugin marketplace add /path/to/EX-APPAgent
 ```
 
-Then install/enable `ex-appagent` in Codex, open your app project, and type `/appagent` or describe the growth analysis you want.
+Then install/enable `ex-appagent` in Codex.
 
-If you do not use plugin installation, copy `AGENTS.md` to your app project root:
+The Python data engine is optional for analysis-only use, but required for automated collection:
 
 ```bash
-cp EX-APPAgent/AGENTS.md /path/to/your-app/AGENTS.md
+git clone https://github.com/Shameless521/EX-APPAgent.git
+cd EX-APPAgent/engine
+uv sync
+uv run appagent --version
 ```
 
 ## Usage
@@ -48,15 +52,37 @@ Navigate to your app project directory:
 
 **Codex CLI:**
 
-Just type naturally — Codex reads `AGENTS.md` automatically:
+Open your app project in Codex after installing the plugin:
 
+```bash
+cd /path/to/your-app
+codex
 ```
-appagent                             # or describe your request directly
+
+In Codex, `/appagent` is a skill trigger phrase, not a Claude Code slash command. You can type `/appagent` or describe the request naturally:
+
+```text
+/appagent
 check revenue trend
 what are competitors up to
 ```
 
-First run automatically guides you through all setup (API keys, app registration, etc.) — just follow the conversation.
+First run automatically guides you through setup (`program.md`, `.appagent/`, API keys, app registration, etc.).
+
+## Existing Claude Code Data
+
+EX-APPAgent stores runtime data in the app project, not in Claude Code. If you used the Claude Code plugin before, keep using the same app project directory:
+
+```text
+program.md
+.appagent/state.json
+.appagent/health.json
+.appagent/data/metrics/
+.appagent/experiments/
+.appagent/insights/
+```
+
+Codex will read the same files and continue from the existing state. Only chat-only context from old Claude Code conversations is not migrated unless it was written into `.appagent/`.
 
 ## What It Does
 

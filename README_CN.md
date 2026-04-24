@@ -16,21 +16,25 @@ claude plugins install ex-appagent
 **Codex CLI：**
 
 ```bash
-git clone https://github.com/Shameless521/EX-APPAgent.git
+codex plugin marketplace add Shameless521/EX-APPAgent
 ```
 
-作为 Codex 插件使用时，先把本仓库作为本地插件市场添加：
+开发调试时也可以从本地 clone 安装：
 
 ```bash
+git clone https://github.com/Shameless521/EX-APPAgent.git
 codex plugin marketplace add /path/to/EX-APPAgent
 ```
 
-然后在 Codex 插件界面安装/启用 `ex-appagent`，进入你的 App 项目目录后输入 `/appagent` 或直接描述增长分析需求。
+然后在 Codex 插件界面安装/启用 `ex-appagent`。
 
-如果不使用插件安装，也可以把 `AGENTS.md` 复制到你的 App 项目根目录：
+Python 数据引擎对纯分析不是必需的，但自动采集数据时需要安装：
 
 ```bash
-cp EX-APPAgent/AGENTS.md /path/to/your-app/AGENTS.md
+git clone https://github.com/Shameless521/EX-APPAgent.git
+cd EX-APPAgent/engine
+uv sync
+uv run appagent --version
 ```
 
 ## 使用
@@ -48,15 +52,38 @@ cp EX-APPAgent/AGENTS.md /path/to/your-app/AGENTS.md
 
 **Codex CLI：**
 
-直接用自然语言描述，Codex 会自动读取 `AGENTS.md`：
+安装插件后，进入你的 App 项目目录启动 Codex：
 
+```bash
+cd /path/to/your-app
+codex
 ```
+
+在 Codex 里，`/appagent` 是 skill 启动词，不是 Claude Code 那种原生 slash command。你可以输入 `/appagent`，也可以直接自然语言描述：
+
+```text
+/appagent
 看看收入趋势
 竞品最近在干嘛
 这周做了什么
 ```
 
-首次运行会自动引导你完成所有配置（API Key、App 注册等），跟着对话走就行。
+首次运行会自动引导你完成配置（`program.md`、`.appagent/`、API Key、App 注册等）。
+
+## 复用 Claude Code 旧数据
+
+EX-APPAgent 的运行数据存在你的 App 项目里，不存在 Claude Code 会话里。如果你之前用的是 Claude Code 插件，只要继续使用同一个 App 项目目录即可：
+
+```text
+program.md
+.appagent/state.json
+.appagent/health.json
+.appagent/data/metrics/
+.appagent/experiments/
+.appagent/insights/
+```
+
+Codex 会读取同一批文件并接着之前的状态执行。只有旧 Claude Code 对话里的纯聊天上下文不会迁移，除非它已经写入 `.appagent/`。
 
 ## 它能干什么
 
