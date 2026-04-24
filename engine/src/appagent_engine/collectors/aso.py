@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import httpx
-
+from appagent_engine.net import retry_httpx_get
 from appagent_engine.store.writer import atomic_write_json
 
 # App Store public search endpoint (no auth needed)
@@ -29,9 +28,7 @@ def check_keyword_rank(
         "limit": limit,
     }
 
-    with httpx.Client(timeout=15) as client:
-        resp = client.get(SEARCH_URL, params=params)
-        resp.raise_for_status()
+    resp = retry_httpx_get(SEARCH_URL, timeout=15, params=params)
 
     results = resp.json().get("results", [])
     for i, app in enumerate(results, 1):

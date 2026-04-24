@@ -1,0 +1,39 @@
+{
+  "name": "ex-appagent",
+  "version": "1.0.0",
+  "description": "Autonomous app management agent for data-driven app growth, experiments, metrics collection, and revenue optimization.",
+  "author": {
+    "name": "MonkCoding",
+    "url": "https://github.com/Shameless521"
+  },
+  "homepage": "https://github.com/Shameless521/EX-APPAgent",
+  "repository": "https://github.com/Shameless521/EX-APPAgent",
+  "license": "MIT",
+  "keywords": [
+    "app-growth",
+    "analytics",
+    "aso",
+    "experiments",
+    "revenue"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "EX-APPAgent",
+    "shortDescription": "Data-driven app growth and optimization agent.",
+    "longDescription": "EX-APPAgent helps manage app growth toward $20/day revenue by collecting metrics, analyzing trends, tracking experiments, monitoring competitors, and generating guarded optimization plans.",
+    "developerName": "MonkCoding",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Automation"
+    ],
+    "websiteURL": "https://github.com/Shameless521/EX-APPAgent",
+    "defaultPrompt": [
+      "/appagent",
+      "Analyze this app's growth data and suggest the next experiment.",
+      "Review competitor and revenue trends for this app."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

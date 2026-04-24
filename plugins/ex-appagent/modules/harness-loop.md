@@ -26,7 +26,7 @@ Read `.appagent/health.json` using Read tool.
   - If user declines → continue in Phase 1 mode (LLM-only analysis)
 - If `health.json` does not exist → continue with warning (Phase 1 mode is fine).
 - **Check engine version** (lightweight, only compares version strings):
-  - Run: `appagent --version 2>/dev/null` → get installed version (e.g., `0.1.0`)
+  - Run: `appagent --version 2>/dev/null` → get installed version (e.g., `1.0.0`)
   - Read the plugin's bundled expected version from `engine/pyproject.toml` version field
   - If installed < expected → tell user: "Data engine update available ({installed} → {expected}). Update now?" 
   - If user agrees → run: `uv tool install --upgrade "appagent-engine @ git+https://github.com/Shameless521/EX-APPAgent#subdirectory=engine"`

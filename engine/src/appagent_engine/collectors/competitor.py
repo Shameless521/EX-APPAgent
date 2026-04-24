@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import html
+import json
+import re
 from pathlib import Path
 
 import httpx
 
+from appagent_engine.net import retry_httpx_get
 from appagent_engine.store.writer import atomic_write_json
 
 # iTunes Lookup API (public, no auth)
@@ -24,9 +28,7 @@ def fetch_ios_app_info(app_id_or_bundle: str, country: str = "us") -> dict | Non
     else:
         params["bundleId"] = app_id_or_bundle
 
-    with httpx.Client(timeout=15) as client:
-        resp = client.get(ITUNES_LOOKUP_URL, params=params)
-        resp.raise_for_status()
+    resp = retry_httpx_get(ITUNES_LOOKUP_URL, timeout=15, params=params)
 
     results = resp.json().get("results", [])
     if not results:
@@ -62,21 +64,36 @@ def fetch_google_play_info(package_name: str) -> dict | None:
     """
     url = f"https://play.google.com/store/apps/details?id={package_name}&hl=en&gl=us"
 
-    with httpx.Client(timeout=15, follow_redirects=True) as client:
-        try:
-            resp = client.get(url)
-            if resp.status_code == 404:
-                return None
-            resp.raise_for_status()
-        except httpx.HTTPStatusError:
+    try:
+        resp = retry_httpx_get(url, timeout=15, follow_redirects=True)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
             return None
+        raise
 
-    # Basic presence check — detailed parsing would need HTML parsing
-    # For now, return minimal info confirming the app exists
+    html_text = resp.text
+    json_ld = _extract_google_play_json_ld(html_text)
+    meta = _extract_meta_tags(html_text)
+    plain_text = _compact_text(html_text)
+    rating_data = json_ld.get("aggregateRating", {}) if isinstance(json_ld.get("aggregateRating"), dict) else {}
+    offers = json_ld.get("offers", {}) if isinstance(json_ld.get("offers"), dict) else {}
+
     return {
         "package_name": package_name,
         "store_url": url,
         "available": resp.status_code == 200,
+        "name": json_ld.get("name") or meta.get("og:title"),
+        "developer": _jsonld_author(json_ld),
+        "rating": _to_float(rating_data.get("ratingValue")),
+        "ratings_count": _to_int(rating_data.get("ratingCount") or rating_data.get("reviewCount")),
+        "price": _to_price(offers.get("price") or meta.get("product:price:amount")),
+        "currency": offers.get("priceCurrency") or meta.get("product:price:currency"),
+        "version": _find_after_label(plain_text, "Version"),
+        "last_updated": _find_after_label(plain_text, "Updated on"),
+        "installs": _find_after_label(plain_text, "Downloads") or _find_installs(plain_text),
+        "content_rating": _find_after_label(plain_text, "Content rating"),
+        "category": json_ld.get("applicationCategory") or _find_after_label(plain_text, "Category"),
+        "description_snippet": (meta.get("og:description") or json_ld.get("description") or "")[:500],
     }
 
 
@@ -115,3 +132,93 @@ def write_competitor_data(appagent_dir: Path, competitor_name: str, data: dict) 
     out_path = appagent_dir / "data" / "competitors" / f"{safe_name}.json"
     atomic_write_json(out_path, data)
     return out_path
+
+
+def _extract_google_play_json_ld(html_text: str) -> dict:
+    for match in re.finditer(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html_text,
+        flags=re.DOTALL | re.IGNORECASE,
+    ):
+        payload = html.unescape(match.group(1)).strip()
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict) and data.get("@type") in {"SoftwareApplication", "MobileApplication"}:
+            return data
+    return {}
+
+
+def _extract_meta_tags(html_text: str) -> dict[str, str]:
+    meta: dict[str, str] = {}
+    pattern = re.compile(r"<meta\s+([^>]+)>", flags=re.IGNORECASE)
+    for match in pattern.finditer(html_text):
+        attrs = _parse_attrs(match.group(1))
+        key = attrs.get("property") or attrs.get("name") or attrs.get("itemprop")
+        content = attrs.get("content")
+        if key and content:
+            meta[key] = html.unescape(content)
+    return meta
+
+
+def _parse_attrs(text: str) -> dict[str, str]:
+    attrs = {}
+    for key, value in re.findall(r'([:\w-]+)=["\']([^"\']*)["\']', text):
+        attrs[key.lower()] = value
+    return attrs
+
+
+def _jsonld_author(data: dict) -> str | None:
+    author = data.get("author")
+    if isinstance(author, dict):
+        return author.get("name")
+    if isinstance(author, str):
+        return author
+    return None
+
+
+def _compact_text(html_text: str) -> str:
+    text = re.sub(r"<script\b.*?</script>", " ", html_text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style\b.*?</style>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = html.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _find_after_label(text: str, label: str) -> str | None:
+    pattern = rf"{re.escape(label)}\s+([^|•]+?)(?=\s+(?:Updated on|Version|Downloads|Content rating|Category|Contains ads|In-app purchases)\b|$)"
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    value = match.group(1).strip(" :-")
+    return value[:120] if value else None
+
+
+def _find_installs(text: str) -> str | None:
+    match = re.search(r"\b(\d+(?:[,.]\d+)?[KMB]?\+?)\s+downloads\b", text, flags=re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def _to_float(value) -> float | None:
+    try:
+        return float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(value) -> int | None:
+    try:
+        return int(float(str(value).replace(",", "")))
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_price(value) -> float | None:
+    if value in (None, ""):
+        return None
+    text = str(value).replace(",", "").strip()
+    if text.lower() == "free":
+        return 0.0
+    text = re.sub(r"[^0-9.\-]", "", text)
+    return _to_float(text)

@@ -9,13 +9,14 @@ from pathlib import Path
 
 import click
 
+from appagent_engine import __version__
 from appagent_engine.config import Config, AppRegistry
 
 ALL_CATEGORIES = ("metrics", "reviews", "aso", "competitors", "experiments")
 
 
 @click.group()
-@click.version_option(package_name="appagent-engine")
+@click.version_option(version=__version__, prog_name="appagent")
 def main():
     """EX-APPAgent Data Engine — automated app metrics collection."""
     pass
@@ -133,6 +134,7 @@ def _collect_one_app(config: Config, app_info, categories: set, target_dates):
 
     # Resolve dates for metrics collection
     dates_to_collect = _resolve_dates(appagent_dir, target_dates) if "metrics" in categories else []
+    reviews_cache: dict[str, list] | None = None
 
     # --- Metrics (per date) ---
     if "metrics" in categories and dates_to_collect:
@@ -145,63 +147,77 @@ def _collect_one_app(config: Config, app_info, categories: set, target_dates):
             if app_info.ios and config.appstore_connect:
                 try:
                     from appagent_engine.collectors.appstore import AppStoreConnectClient
+                    health.mark_step_attempted("metrics.ios")
                     client = AppStoreConnectClient(config.appstore_connect)
                     ios_metrics = client.collect_daily_metrics(app_info.ios.bundle_id, report_date=rd)
+                    _attach_ios_public_rating(ios_metrics, app_info.ios.bundle_id, health)
                     click.echo(f"  [iOS] Revenue: ${ios_metrics['revenue']}, Downloads: {ios_metrics['downloads']}")
                     health.set_api_status("appstore_connect", "ok")
+                    health.mark_step_success("metrics.ios")
                 except Exception as e:
                     click.echo(f"  [iOS] Error: {e}", err=True)
-                    health.set_api_status("appstore_connect", f"error: {e}")
+                    health.set_api_status("appstore_connect", _error_status(e))
                     health.mark_run_error(f"iOS metrics failed: {e}")
 
             # Android
             if app_info.android and config.google_play:
                 try:
                     from appagent_engine.collectors.googleplay import GooglePlayClient
+                    health.mark_step_attempted("metrics.android")
                     client = GooglePlayClient(config.google_play)
                     android_metrics = client.collect_daily_metrics(app_info.android.package_name, report_date=rd)
-                    click.echo(f"  [Android] Reviews: {android_metrics.get('reviews_count', 0)}")
-                    health.set_api_status("google_play", "ok")
+                    revenue = _display_metric(android_metrics.get("revenue"), money=True)
+                    downloads = _display_metric(android_metrics.get("downloads"))
+                    click.echo(
+                        f"  [Android] Revenue: {revenue}, Downloads: {downloads}, "
+                        f"Reviews: {android_metrics.get('reviews_count', 0)}"
+                    )
+                    missing = android_metrics.get("missing_fields", [])
+                    if missing:
+                        health.set_api_status("google_play", f"partial: missing {', '.join(missing)}")
+                        health.mark_run_error(f"Android metrics incomplete: missing {', '.join(missing)}")
+                    else:
+                        health.set_api_status("google_play", "ok")
+                    health.mark_step_success("metrics.android")
                 except Exception as e:
                     click.echo(f"  [Android] Error: {e}", err=True)
-                    health.set_api_status("google_play", f"error: {e}")
+                    health.set_api_status("google_play", _error_status(e))
                     health.mark_run_error(f"Android metrics failed: {e}")
 
+            if ios_metrics is None and android_metrics is None:
+                click.echo("  No platform metrics collected; skipping daily metrics file")
+                health.mark_run_error("Metrics failed: no platform metrics collected", fatal=True)
+                continue
+
+            if reviews_cache is None:
+                reviews_cache = _collect_reviews_for_app(config, app_info, health, appagent_dir, echo=False)
+
+            ios_reviews_for_date = _reviews_on_date(reviews_cache.get("ios", []), rd)
+            android_reviews_for_date = _reviews_on_date(reviews_cache.get("android", []), rd)
+
             # Assemble and write
-            metrics = assemble_daily_metrics(report_date=rd, ios_metrics=ios_metrics, android_metrics=android_metrics)
+            metrics = assemble_daily_metrics(
+                report_date=rd,
+                ios_metrics=ios_metrics,
+                android_metrics=android_metrics,
+                reviews_ios=[r.to_dict() for r in ios_reviews_for_date],
+                reviews_android=[r.to_dict() for r in android_reviews_for_date],
+            )
             out_path = write_daily_metrics(appagent_dir, metrics)
             click.echo(f"  Written: {out_path}")
+            health.mark_step_success("metrics")
 
     # --- Reviews ---
     if "reviews" in categories:
         click.echo("\n[Reviews] Fetching...")
-        review_count = 0
-
-        if app_info.ios and config.appstore_connect:
-            try:
-                from appagent_engine.collectors.appstore import AppStoreConnectClient
-                from appagent_engine.collectors.reviews import collect_ios_reviews
-                client = AppStoreConnectClient(config.appstore_connect)
-                app_id = client.get_app_id(app_info.ios.bundle_id)
-                if app_id:
-                    reviews = collect_ios_reviews(client, app_id)
-                    review_count += len(reviews)
-                    click.echo(f"  [iOS] {len(reviews)} reviews")
-            except Exception as e:
-                click.echo(f"  [iOS] Error: {e}", err=True)
-
-        if app_info.android and config.google_play:
-            try:
-                from appagent_engine.collectors.googleplay import GooglePlayClient
-                from appagent_engine.collectors.reviews import collect_android_reviews
-                client = GooglePlayClient(config.google_play)
-                reviews = collect_android_reviews(client, app_info.android.package_name)
-                review_count += len(reviews)
-                click.echo(f"  [Android] {len(reviews)} reviews")
-            except Exception as e:
-                click.echo(f"  [Android] Error: {e}", err=True)
-
-        click.echo(f"  Total: {review_count} reviews")
+        if reviews_cache is None:
+            reviews_cache = _collect_reviews_for_app(config, app_info, health, appagent_dir, echo=True)
+        else:
+            review_count = sum(len(items) for items in reviews_cache.values())
+            for platform, reviews in reviews_cache.items():
+                label = "iOS" if platform == "ios" else "Android" if platform == "android" else platform
+                click.echo(f"  [{label}] {len(reviews)} reviews")
+            click.echo(f"  Total: {review_count} reviews")
 
     # --- ASO ---
     if "aso" in categories and app_info.ios:
@@ -210,14 +226,17 @@ def _collect_one_app(config: Config, app_info, categories: set, target_dates):
             from appagent_engine.collectors.aso import check_multiple_keywords, write_aso_data
             keywords = app_info.aso_keywords
             if keywords:
+                health.mark_step_attempted("aso")
                 rankings = check_multiple_keywords(keywords, app_info.ios.bundle_id)
                 write_aso_data(appagent_dir, rankings)
                 ranked = {k: v for k, v in rankings.items() if v is not None}
                 click.echo(f"  Ranked: {ranked or 'none in top 200'}")
+                health.mark_step_success("aso")
             else:
                 click.echo("  No keywords configured in apps.json")
         except Exception as e:
             click.echo(f"  Error: {e}", err=True)
+            health.mark_run_error(f"ASO failed: {e}")
 
     # --- Competitors ---
     if "competitors" in categories:
@@ -227,12 +246,17 @@ def _collect_one_app(config: Config, app_info, categories: set, target_dates):
             # Read watch_list from program.md
             competitors = _read_competitor_ids(app_info)
             for comp_name, comp_id in competitors:
+                health.mark_step_attempted("competitors")
                 data = collect_competitor_data(comp_id, comp_name)
                 write_competitor_data(appagent_dir, comp_name, data)
-                rating = data.get("ios", {}).get("rating", "?") if data.get("ios") else "?"
+                ios_rating = data.get("ios", {}).get("rating") if data.get("ios") else None
+                android_rating = data.get("android", {}).get("rating") if data.get("android") else None
+                rating = ios_rating or android_rating or "?"
                 click.echo(f"  {comp_name}: rating {rating}")
+                health.mark_step_success("competitors")
         except Exception as e:
             click.echo(f"  Error: {e}", err=True)
+            health.mark_run_error(f"Competitors failed: {e}")
 
     # --- Experiments ---
     if "experiments" in categories:
@@ -242,6 +266,7 @@ def _collect_one_app(config: Config, app_info, categories: set, target_dates):
             click.echo(f"  Pre-calculated {len(precalcs)} experiments")
         else:
             click.echo("  No pending experiments")
+        health.mark_step_success("experiments")
 
     # --- Milestone Detection ---
     click.echo("\n[Milestone] Checking...")
@@ -285,34 +310,93 @@ def _collect_one_app(config: Config, app_info, categories: set, target_dates):
 
 def _read_competitor_ids(app_info) -> list[tuple[str, str]]:
     """Extract competitor names and IDs from program.md watch_list."""
+    from appagent_engine.config import parse_watch_list
+
     program_path = app_info.path / "program.md"
-    if not program_path.exists():
-        return []
+    return [
+        (entry["name"], entry["identifier"])
+        for entry in parse_watch_list(program_path)
+    ]
 
-    content = program_path.read_text()
-    competitors = []
-    in_watch_list = False
-    for line in content.split("\n"):
-        line = line.strip()
-        if "watch_list:" in line:
-            in_watch_list = True
-            continue
-        if in_watch_list:
-            if line.startswith("- "):
-                # Extract name and optional bundle_id from parentheses
-                name = line[2:].split("(")[0].strip().split("—")[0].strip()
-                # Try to extract bundle_id from parentheses
-                bundle_id = ""
-                if "(" in line and ")" in line:
-                    paren = line[line.index("(") + 1:line.index(")")]
-                    if "." in paren and " " not in paren:
-                        bundle_id = paren
-                competitors.append((name, bundle_id or name))
-            elif not line.startswith("-") and not line.startswith("#"):
-                if line and not line.startswith(" "):
-                    break  # End of watch_list section
 
-    return competitors
+def _collect_reviews_for_app(config: Config, app_info, health, appagent_dir: Path, echo: bool) -> dict[str, list]:
+    from appagent_engine.collectors.reviews import (
+        collect_android_reviews,
+        collect_ios_reviews,
+        write_reviews,
+    )
+
+    reviews_by_platform: dict[str, list] = {"ios": [], "android": []}
+
+    if app_info.ios and config.appstore_connect:
+        try:
+            from appagent_engine.collectors.appstore import AppStoreConnectClient
+            health.mark_step_attempted("reviews.ios")
+            client = AppStoreConnectClient(config.appstore_connect)
+            app_id = client.get_app_id(app_info.ios.bundle_id)
+            if app_id:
+                reviews_by_platform["ios"] = collect_ios_reviews(client, app_id)
+            health.mark_step_success("reviews.ios")
+            if echo:
+                click.echo(f"  [iOS] {len(reviews_by_platform['ios'])} reviews")
+        except Exception as e:
+            if echo:
+                click.echo(f"  [iOS] Error: {e}", err=True)
+            health.mark_run_error(f"iOS reviews failed: {e}")
+
+    if app_info.android and config.google_play:
+        try:
+            from appagent_engine.collectors.googleplay import GooglePlayClient
+            health.mark_step_attempted("reviews.android")
+            client = GooglePlayClient(config.google_play)
+            reviews_by_platform["android"] = collect_android_reviews(client, app_info.android.package_name)
+            health.mark_step_success("reviews.android")
+            if echo:
+                click.echo(f"  [Android] {len(reviews_by_platform['android'])} reviews")
+        except Exception as e:
+            if echo:
+                click.echo(f"  [Android] Error: {e}", err=True)
+            health.mark_run_error(f"Android reviews failed: {e}")
+
+    all_reviews = reviews_by_platform["ios"] + reviews_by_platform["android"]
+    if all_reviews:
+        out_path = write_reviews(appagent_dir, all_reviews)
+        health.set_data_freshness("reviews", date.today().isoformat())
+        health.mark_step_success("reviews")
+        if echo:
+            click.echo(f"  Written: {out_path}")
+
+    if echo:
+        click.echo(f"  Total: {len(all_reviews)} reviews")
+    return reviews_by_platform
+
+
+def _reviews_on_date(reviews: list, report_date: date) -> list:
+    date_prefix = report_date.isoformat()
+    return [review for review in reviews if (review.date or "").startswith(date_prefix)]
+
+
+def _attach_ios_public_rating(metrics: dict, bundle_id: str, health) -> None:
+    try:
+        from appagent_engine.collectors.competitor import fetch_ios_app_info
+        info = fetch_ios_app_info(bundle_id)
+        if not info:
+            return
+        metrics["rating"] = info.get("rating")
+        metrics["ratings_count"] = info.get("ratings_count")
+    except Exception as e:
+        health.mark_run_error(f"iOS public rating failed: {e}")
+
+
+def _display_metric(value, money: bool = False) -> str:
+    if value is None:
+        return "unknown"
+    return f"${float(value):.2f}" if money else str(value)
+
+
+def _error_status(exc: Exception) -> str:
+    from appagent_engine.net import classify_error
+    return f"{classify_error(exc)}: {exc}"
 
 
 @main.command()
@@ -340,10 +424,14 @@ def health():
         api = data.get("api_status", {})
 
         status = engine.get("status", "unknown")
-        status_icon = "✓" if status == "ok" else "✗" if status == "error" else "?"
+        if status == "ok" and engine.get("errors"):
+            status = "partial"
+        status_icon = "✓" if status == "ok" else "✗" if status == "error" else "!" if status == "partial" else "?"
         click.echo(f"  Engine: {status_icon} {status}")
         click.echo(f"  Last run: {engine.get('last_run', 'never')}")
         click.echo(f"  Last success: {engine.get('last_success', 'never')}")
+        if engine.get("last_partial"):
+            click.echo(f"  Last partial: {engine.get('last_partial')}")
 
         if engine.get("errors"):
             for err in engine["errors"]:
@@ -351,6 +439,7 @@ def health():
 
         click.echo(f"  Data freshness:")
         click.echo(f"    Metrics:     {freshness.get('metrics', 'none')}")
+        click.echo(f"    Reviews:     {freshness.get('reviews', 'none')}")
         click.echo(f"    Competitors: {freshness.get('competitors', 'none')}")
         click.echo(f"    ASO:         {freshness.get('aso', 'none')}")
 
@@ -419,23 +508,15 @@ def budget_status(app: str | None):
             click.echo(f"\n{app_info.name}: No budget entries recorded")
             continue
 
-        # Read limits from program.md (simple extraction)
-        daily_limit = 10.0  # Default
-        min_roas = 1.5      # Default
+        # Read limits from program.md.
+        daily_limit = 10.0
+        min_roas = 1.5
         program_path = app_info.path / "program.md"
         if program_path.exists():
-            content = program_path.read_text()
-            for line in content.split("\n"):
-                if "daily_limit:" in line:
-                    import re
-                    m = re.search(r'\$?(\d+(?:\.\d+)?)', line.split(":")[1])
-                    if m:
-                        daily_limit = float(m.group(1))
-                elif "min_roas:" in line:
-                    import re
-                    m = re.search(r'(\d+(?:\.\d+)?)', line.split(":")[1])
-                    if m:
-                        min_roas = float(m.group(1))
+            from appagent_engine.config import parse_budget_constraints
+            constraints = parse_budget_constraints(program_path)
+            daily_limit = constraints["daily_limit"]
+            min_roas = constraints["min_roas"]
 
         status = check_budget_compliance(entries, daily_limit, min_roas)
         channels = spend_by_channel(entries)

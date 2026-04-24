@@ -19,7 +19,15 @@ claude plugins install ex-appagent
 git clone https://github.com/Shameless521/EX-APPAgent.git
 ```
 
-Then copy `AGENTS.md` to your app project root:
+To use it as a Codex plugin, add this repo as a local plugin marketplace:
+
+```bash
+codex plugin marketplace add /path/to/EX-APPAgent
+```
+
+Then install/enable `ex-appagent` in Codex, open your app project, and type `/appagent` or describe the growth analysis you want.
+
+If you do not use plugin installation, copy `AGENTS.md` to your app project root:
 
 ```bash
 cp EX-APPAgent/AGENTS.md /path/to/your-app/AGENTS.md
@@ -72,6 +80,21 @@ First run automatically guides you through all setup (API keys, app registration
 ## Update
 
 Skill layer updates automatically with the plugin. Data engine version is checked on each `/appagent` run — you'll be prompted to upgrade when available.
+
+## Google Play Reports
+
+Google Play revenue, downloads, and ratings are collected from Play Console reports stored in your private Google Cloud Storage report bucket. Add the bucket copied from Play Console > Download reports:
+
+```json
+{
+  "google_play": {
+    "service_account_path": "/path/to/service-account.json",
+    "reports_bucket": "pubsite_prod_rev_01234567890987654321"
+  }
+}
+```
+
+Network requests honor `HTTPS_PROXY`, `HTTP_PROXY`, `https_proxy`, and `http_proxy`. The engine retries transient timeout, SSL EOF, 429, and 5xx failures with backoff.
 
 ## Requirements
 

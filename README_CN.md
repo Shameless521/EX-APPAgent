@@ -19,7 +19,15 @@ claude plugins install ex-appagent
 git clone https://github.com/Shameless521/EX-APPAgent.git
 ```
 
-然后把 `AGENTS.md` 复制到你的 App 项目根目录：
+作为 Codex 插件使用时，先把本仓库作为本地插件市场添加：
+
+```bash
+codex plugin marketplace add /path/to/EX-APPAgent
+```
+
+然后在 Codex 插件界面安装/启用 `ex-appagent`，进入你的 App 项目目录后输入 `/appagent` 或直接描述增长分析需求。
+
+如果不使用插件安装，也可以把 `AGENTS.md` 复制到你的 App 项目根目录：
 
 ```bash
 cp EX-APPAgent/AGENTS.md /path/to/your-app/AGENTS.md
@@ -72,6 +80,21 @@ cp EX-APPAgent/AGENTS.md /path/to/your-app/AGENTS.md
 ## 更新
 
 Skill 层随插件自动更新。数据引擎跑 `/appagent` 时会自动检测新版本并提示升级。
+
+## Google Play 报告
+
+Google Play 收入、下载量、评分来自 Play Console 导出到私有 Google Cloud Storage 的报告 bucket。请在 Play Console > Download reports 复制 bucket，并配置：
+
+```json
+{
+  "google_play": {
+    "service_account_path": "/path/to/service-account.json",
+    "reports_bucket": "pubsite_prod_rev_01234567890987654321"
+  }
+}
+```
+
+网络请求支持 `HTTPS_PROXY`、`HTTP_PROXY`、`https_proxy`、`http_proxy` 代理环境变量，并会对 timeout、SSL EOF、429、5xx 等临时错误做退避重试。
 
 ## 依赖
 

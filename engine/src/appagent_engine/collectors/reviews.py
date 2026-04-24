@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
+from pathlib import Path
+
+from appagent_engine.store.writer import atomic_write_json
 
 
 @dataclass
@@ -79,6 +83,56 @@ def collect_android_reviews(
     return reviews
 
 
+def write_reviews(
+    appagent_dir: Path,
+    reviews: list[Review],
+    report_date: date | None = None,
+) -> Path:
+    """Merge and persist collected reviews under data/reviews/YYYY-MM-DD.json."""
+    report_date = report_date or date.today()
+    out_path = appagent_dir / "data" / "reviews" / f"{report_date.isoformat()}.json"
+    existing_reviews: list[dict] = []
+    if out_path.exists():
+        import json
+        existing = json.loads(out_path.read_text())
+        if isinstance(existing, list):
+            existing_reviews = existing
+        else:
+            existing_reviews = existing.get("reviews", [])
+
+    collected_at = datetime.now(timezone.utc).isoformat()
+    merged: dict[str, dict] = {}
+    for item in existing_reviews:
+        key = _review_key(item)
+        if key:
+            merged[key] = item
+    for review in reviews:
+        item = review.to_dict()
+        item["collected_at"] = collected_at
+        key = _review_key(item)
+        if key:
+            merged[key] = item
+
+    ordered = sorted(
+        merged.values(),
+        key=lambda item: item.get("date") or item.get("collected_at") or "",
+        reverse=True,
+    )
+    counts: dict[str, int] = {}
+    for item in ordered:
+        platform = item.get("platform") or "unknown"
+        counts[platform] = counts.get(platform, 0) + 1
+
+    atomic_write_json(out_path, {
+        "date": report_date.isoformat(),
+        "collected_at": collected_at,
+        "count": len(ordered),
+        "platform_counts": counts,
+        "reviews": ordered,
+    })
+    return out_path
+
+
 def _android_timestamp(ts: dict) -> str:
     """Convert Google's Timestamp proto to ISO string."""
     seconds = ts.get("seconds", 0)
@@ -87,3 +141,11 @@ def _android_timestamp(ts: dict) -> str:
         dt = datetime.fromtimestamp(int(seconds), tz=timezone.utc)
         return dt.isoformat()
     return ""
+
+
+def _review_key(item: dict) -> str:
+    review_id = str(item.get("id") or "").strip()
+    platform = str(item.get("platform") or "").strip()
+    if not review_id or not platform:
+        return ""
+    return f"{platform}:{review_id}"

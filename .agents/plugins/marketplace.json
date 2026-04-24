@@ -1,0 +1,20 @@
+{
+  "name": "ex-appagent-marketplace",
+  "interface": {
+    "displayName": "EX-APPAgent"
+  },
+  "plugins": [
+    {
+      "name": "ex-appagent",
+      "source": {
+        "source": "local",
+        "path": "./plugins/ex-appagent"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import httpx
 import jwt
 
 from appagent_engine.config import AppStoreConnectConfig
+from appagent_engine.net import with_retry
 
 BASE_URL = "https://api.appstoreconnect.apple.com"
 
@@ -54,10 +55,13 @@ class AppStoreConnectClient:
         return {"Authorization": f"Bearer {self.token}"}
 
     def _get(self, url: str, **kwargs) -> httpx.Response:
-        with httpx.Client(timeout=30) as client:
-            resp = client.get(url, headers=self._headers, **kwargs)
-            resp.raise_for_status()
-            return resp
+        def _request() -> httpx.Response:
+            with httpx.Client(timeout=30) as client:
+                resp = client.get(url, headers=self._headers, **kwargs)
+                resp.raise_for_status()
+                return resp
+
+        return with_retry(_request, attempts=3)
 
     # --- Sales & Trends Reports ---
 
